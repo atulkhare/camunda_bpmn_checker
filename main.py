@@ -1,6 +1,6 @@
 import sys
 import argparse
-from core import run_check, prepare_sync, execute_sync
+from core import run_check, prepare_sync, execute_sync, compare_servers
 from config import SOURCE_CAMUNDA_REST_URL, TARGET_CAMUNDA_REST_URL
 
 def check_command():
@@ -80,6 +80,34 @@ def sync_command():
             print("\nAll deployments successful!")
     else:
         print("Sync cancelled by user.")
+def compare_servers_command():
+    print("Comparing Source Server to Target Server by Deployment Key...")
+    result = compare_servers()
+    
+    if result.get("error"):
+        print(result["error"])
+        sys.exit(1)
+        
+    print("\n--- Differences Found ---")
+    diff_count = 0
+    for f in result["modified"]:
+        print(f" [Modified (Content mismatch)] {f['resource']} (Key: {f['key']})")
+        print("   --- Diff ---")
+        for line in f['diff'].split('\n')[:20]: # Show up to 20 lines of diff
+            print(f"   {line}")
+        if len(f['diff'].split('\n')) > 20:
+            print("   ... (diff truncated)")
+        print()
+        diff_count += 1
+    for f in result["missing_in_target"]:
+        print(f" [Missing in Target] {f['resource']} (Key: {f['key']})")
+        diff_count += 1
+        
+    if diff_count == 0:
+        print("Servers are perfectly synced!")
+    else:
+        print(f"\nTotal differences: {diff_count}")
+        sys.exit(1)
 
 def ui_command():
     print("Starting Web UI...")
@@ -92,6 +120,7 @@ def main():
 
     subparsers.add_parser("check", help="Check if Camunda deployed definitions match local Git files")
     subparsers.add_parser("sync", help="Download from Source Camunda and deploy to Target")
+    subparsers.add_parser("compare-servers", help="Show files that differ between Source and Target servers")
     subparsers.add_parser("ui", help="Start the modern Web UI dashboard")
 
     args = parser.parse_args()
@@ -100,6 +129,8 @@ def main():
         check_command()
     elif args.command == "sync":
         sync_command()
+    elif args.command == "compare-servers":
+        compare_servers_command()
     elif args.command == "ui":
         ui_command()
     else:

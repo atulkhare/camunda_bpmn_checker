@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 import threading
 import webbrowser
 import time
-from core import run_check, prepare_sync, execute_sync
+from core import run_check, prepare_sync, execute_sync, compare_servers
 from config import SOURCE_CAMUNDA_REST_URL, TARGET_CAMUNDA_REST_URL, GIT_REPO_PATH
 
 app = Flask(__name__, static_folder='static', static_url_path='/', template_folder='static')
@@ -24,6 +24,11 @@ def get_config():
 @app.route("/api/check")
 def api_check():
     result = run_check()
+    return jsonify(result)
+
+@app.route("/api/compare")
+def api_compare():
+    result = compare_servers()
     return jsonify(result)
 
 @app.route("/api/sync/prepare")

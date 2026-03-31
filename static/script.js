@@ -1,5 +1,7 @@
 const app = {
     sessionId: null,
+    viewerSource: null,
+    viewerTarget: null,
 
     init() {
         this.fetchConfig();
@@ -88,6 +90,86 @@ const app = {
         } catch (e) {
             this.renderError(e.message);
         }
+    },
+
+    async compareServers() {
+        this.setLoading("Comparing Source and Target Servers by Key");
+        try {
+            const res = await fetch('/api/compare');
+            const data = await res.json();
+            
+            if (data.error) {
+                this.renderError(data.error);
+                return;
+            }
+
+            let html = `<h2>Server Comparison Results</h2>`;
+            
+            if (data.modified.length === 0 && data.missing_in_target.length === 0) {
+                html += `<div style="padding:1rem; background:rgba(16, 185, 129, 0.2); border-radius:8px; margin-bottom:1rem; color:var(--success)">
+                    <strong>Perfect Match:</strong> No differences found between the servers!
+                </div>`;
+            } else {
+                html += `<p>Found differences between the Source and Target environments:</p>`;
+            }
+
+            // Build Modified List with custom buttons
+            if (data.modified.length > 0) {
+                html += `<div class="result-group">
+                    <h3>Modified (Content Mismatch) <span class="badge badge-warning">${data.modified.length}</span></h3>
+                    <ul class="result-list">`;
+                
+                if (!window._diffData) window._diffData = [];
+                data.modified.forEach((item, index) => {
+                    window._diffData[index] = item;
+                    html += `
+                        <li>
+                            <div>
+                                <strong style="display:block;">${item.resource}</strong> 
+                                <span style="color:var(--text-secondary); font-size:0.8rem;">Key: ${item.key} | Type: ${item.type}</span>
+                            </div>
+                            ${item.type === 'process' 
+                                ? `<button class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size:0.85rem;" onclick="app.openDiffModal(${index})">View Diagram diff</button>` 
+                                : `<span style="font-size:0.8rem; color:var(--text-secondary)">DMN (Check CLI for text diff)</span>`}
+                        </li>
+                    `;
+                });
+                html += `</ul></div>`;
+            }
+
+            html += this.renderList("Missing in Target", data.missing_in_target, "badge-danger", false, "resource", "key");
+
+            document.getElementById('results-container').innerHTML = html;
+        } catch (e) {
+            this.renderError(e.message);
+        }
+    },
+
+    openDiffModal(index) {
+        const item = window._diffData[index];
+        document.getElementById('modal-title').innerText = `Visual Comparison: ${item.resource}`;
+        document.getElementById('diff-modal').classList.remove('hidden');
+
+        if (!this.viewerSource) {
+            this.viewerSource = new BpmnJS({ container: '#canvas-source', height: '100%', width: '100%' });
+        }
+        if (!this.viewerTarget) {
+            this.viewerTarget = new BpmnJS({ container: '#canvas-target', height: '100%', width: '100%' });
+        }
+
+        this.viewerSource.importXML(item.source_xml)
+            .then(() => { this.viewerSource.get('canvas').zoom('fit-viewport'); })
+            .catch(err => console.error("Source XML Import Error:", err));
+            
+        this.viewerTarget.importXML(item.target_xml)
+            .then(() => { this.viewerTarget.get('canvas').zoom('fit-viewport'); })
+            .catch(err => console.error("Target XML Import Error:", err));
+    },
+
+    closeModal() {
+        document.getElementById('diff-modal').classList.add('hidden');
+        if (this.viewerSource) this.viewerSource.clear();
+        if (this.viewerTarget) this.viewerTarget.clear();
     },
 
     async executeSync() {

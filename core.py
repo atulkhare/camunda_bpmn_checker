@@ -140,3 +140,88 @@ def execute_sync(deployments_to_sync):
             result["failed"].append({"deployment_name": dep_name, "error": str(e)})
             
     return result
+
+def compare_servers():
+    result = {
+        "missing_in_target": [],
+        "modified": [],
+        "matches": [],
+        "error": None
+    }
+    
+    try:
+        source_process_defs = get_latest_process_definitions(SOURCE_CAMUNDA_REST_URL)
+        source_decision_defs = get_latest_decision_definitions(SOURCE_CAMUNDA_REST_URL)
+    except Exception as e:
+        result["error"] = f"Error fetching from Source Server: {e}"
+        return result
+        
+    try:
+        target_process_defs = get_latest_process_definitions(TARGET_CAMUNDA_REST_URL)
+        target_decision_defs = get_latest_decision_definitions(TARGET_CAMUNDA_REST_URL)
+    except Exception as e:
+        result["error"] = f"Error fetching from Target Server: {e}"
+        return result
+        
+    target_defs = {}
+    for p in target_process_defs:
+        key = p.get("key")
+        if key:
+            target_defs[key] = {"id": p.get("id"), "type": "process", "resource": p.get("resource")}
+    for d in target_decision_defs:
+        key = d.get("key")
+        if key:
+            target_defs[key] = {"id": d.get("id"), "type": "decision", "resource": d.get("resource")}
+            
+    source_defs = []
+    for p in source_process_defs:
+        if p.get("key"):
+            source_defs.append({"key": p.get("key"), "resource": p.get("resource"), "id": p.get("id"), "type": "process"})
+    for d in source_decision_defs:
+        if d.get("key"):
+            source_defs.append({"key": d.get("key"), "resource": d.get("resource"), "id": d.get("id"), "type": "decision"})
+            
+    import difflib
+    from comparator import canonicalize_xml
+
+    for s_def in source_defs:
+        key = s_def["key"]
+        resource_name = s_def["resource"]
+        
+        if key not in target_defs:
+            result["missing_in_target"].append({"key": key, "resource": resource_name})
+            continue
+            
+        t_def = target_defs[key]
+        
+        try:
+            if s_def["type"] == "process":
+                source_xml = get_process_definition_xml(SOURCE_CAMUNDA_REST_URL, s_def["id"])
+                target_xml = get_process_definition_xml(TARGET_CAMUNDA_REST_URL, t_def["id"])
+            else:
+                source_xml = get_decision_definition_xml(SOURCE_CAMUNDA_REST_URL, s_def["id"])
+                target_xml = get_decision_definition_xml(TARGET_CAMUNDA_REST_URL, t_def["id"])
+        except Exception as e:
+            continue
+            
+        if compare_bpmn(source_xml, target_xml):
+            result["matches"].append({"key": key, "resource": resource_name})
+        else:
+            s_lines = canonicalize_xml(source_xml).splitlines()
+            t_lines = canonicalize_xml(target_xml).splitlines()
+            diff_text = "\n".join(difflib.unified_diff(
+                t_lines, s_lines, 
+                fromfile=f"Target Server ({t_def['resource']})", 
+                tofile=f"Source Server ({resource_name})"
+            ))
+            
+            result["modified"].append({
+                "key": key,
+                "resource": resource_name,
+                "type": s_def["type"],
+                "diff": diff_text,
+                "source_xml": source_xml,
+                "target_xml": target_xml
+            })
+            
+    return result

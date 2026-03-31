@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Camunda Configurator & Sync Tool</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -39,6 +40,12 @@
                 </svg>
                 Check Sync
             </button>
+            <button class="btn" style="background:#0d9488; color:white; border-radius:8px;" id="btn-compare" onclick="app.compareServers()">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Compare Servers
+            </button>
             <button class="btn btn-secondary" id="btn-sync" onclick="app.prepareSync()">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -54,6 +61,25 @@
         </section>
 
     </main>
+
+    <div id="diff-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h3 id="modal-title">Visual Comparison</h3>
+                <button class="btn-close" onclick="app.closeModal()">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div class="viewer-container">
+                    <h4>Source Environment <span class="badge badge-success">Latest</span></h4>
+                    <div id="canvas-source" class="bpmn-canvas"></div>
+                </div>
+                <div class="viewer-container">
+                    <h4>Target Environment <span class="badge badge-warning">Current</span></h4>
+                    <div id="canvas-target" class="bpmn-canvas"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
