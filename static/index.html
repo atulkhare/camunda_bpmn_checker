@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camunda Configurator & Sync Tool</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <main class="container">
+        
+        <header>
+            <h1>Camunda BPMN Sync</h1>
+            <p>Easily check and synchronize your process models across environments seamlessly.</p>
+        </header>
+
+        <section class="card config-panel">
+            <h2>Current Configuration</h2>
+            <div class="input-group">
+                <label>Source Camunda (Read-only)</label>
+                <input type="text" id="config-source" readonly value="Loading...">
+            </div>
+            <div class="input-group">
+                <label>Target Camunda (Read-only)</label>
+                <input type="text" id="config-target" readonly value="Loading...">
+            </div>
+            <div class="input-group">
+                <label>Git Repository Path (Read-only)</label>
+                <input type="text" id="config-git" readonly value="Loading...">
+            </div>
+        </section>
+
+        <section class="action-panel">
+            <button class="btn btn-primary" id="btn-check" onclick="app.runCheck()">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Check Sync
+            </button>
+            <button class="btn btn-secondary" id="btn-sync" onclick="app.prepareSync()">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Prepare Sync
+            </button>
+        </section>
+
+        <section class="results-panel" id="results-container">
+            <div class="empty-state">
+                <p>Results will be displayed here</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
