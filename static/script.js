@@ -22,8 +22,8 @@ const app = {
         try {
             const res = await fetch('/api/config');
             const data = await res.json();
-            if(document.getElementById('config-source')) document.getElementById('config-source').value = data.SOURCE_CAMUNDA_REST_URL || '';
-            if(document.getElementById('config-target-base')) document.getElementById('config-target-base').value = data.CAMUNDA_BASE_URL || 'http://localhost:8080';
+            if(document.getElementById('config-source')) document.getElementById('config-source').value = (data.SOURCE_CAMUNDA_REST_URL || "").replace("/engine-rest", "").replace(/\/$/, "");
+            if(document.getElementById('config-target-base')) document.getElementById('config-target-base').value = (data.TARGET_CAMUNDA_REST_URL || "").replace("/engine-rest", "").replace(/\/$/, "");
             if(document.getElementById('config-folder')) document.getElementById('config-folder').value = data.TECHNICAL_FOLDER_PATH || '';
         } catch (e) {
             console.error(e);
@@ -423,6 +423,10 @@ const app = {
         const item = window._diffData[index];
         document.getElementById('modal-title').innerText = `Visual Comparison: ${item.resource}`;
         document.getElementById('diff-modal').classList.remove('hidden');
+
+        document.getElementById('diff-text-content').textContent = item.diff && item.diff.trim().length > 0 
+            ? item.diff 
+            : "No XML textual differences detected. (Or this file was completely overridden)";
 
         if (!this.viewerSource) {
             this.viewerSource = new BpmnJS({ container: '#canvas-source', height: '100%', width: '100%' });

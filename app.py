@@ -16,10 +16,10 @@ def index():
 @app.route("/api/config")
 def get_config():
     return jsonify({
-        "SOURCE_CAMUNDA_REST_URL": SOURCE_CAMUNDA_REST_URL,
-        "TARGET_CAMUNDA_REST_URL": TARGET_CAMUNDA_REST_URL,
+        "SOURCE_CAMUNDA_REST_URL": str(SOURCE_CAMUNDA_REST_URL).replace("/engine-rest", "").rstrip("/"),
+        "TARGET_CAMUNDA_REST_URL": str(TARGET_CAMUNDA_REST_URL).replace("/engine-rest", "").rstrip("/"),
         "GIT_REPO_PATH": GIT_REPO_PATH,
-        "CAMUNDA_BASE_URL": CAMUNDA_BASE_URL,
+        "CAMUNDA_BASE_URL": str(CAMUNDA_BASE_URL).replace("/engine-rest", "").rstrip("/"),
         "TECHNICAL_FOLDER_PATH": TECHNICAL_FOLDER_PATH
     })
 

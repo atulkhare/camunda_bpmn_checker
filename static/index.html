@@ -6,7 +6,7 @@
     <title>Aligner</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
+    <script src="bpmn-viewer.production.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -98,24 +98,30 @@
     </main>
 
     <div id="diff-modal" class="modal-overlay hidden">
-        <div class="modal-content">
+        <div class="modal-content" style="max-height: 90vh; display: flex; flex-direction: column;">
             <header class="modal-header">
                 <h3 id="modal-title">Visual Comparison</h3>
                 <button class="btn-close" onclick="app.closeModal()">&times;</button>
             </header>
-            <div class="modal-body">
-                <div class="viewer-container">
-                    <h4>Source Environment <span class="badge badge-success">Latest</span></h4>
-                    <div id="canvas-source" class="bpmn-canvas"></div>
+            <div class="modal-body" style="flex: 1; overflow-y: auto; flex-direction: column; width: 100%;">
+                <div style="display: flex; gap: 1rem; width: 100%; height: 450px; flex: 0 0 450px; margin-bottom: 1rem;">
+                    <div class="viewer-container" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                        <h4 style="flex: 0 0 auto;">Source Environment <span class="badge badge-success">Latest</span></h4>
+                        <div id="canvas-source" class="bpmn-canvas" style="flex: 1; min-height: 400px; width: 100%; height: 100%;"></div>
+                    </div>
+                    <div class="viewer-container" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                        <h4 style="flex: 0 0 auto;">Target Environment <span class="badge badge-warning">Current</span></h4>
+                        <div id="canvas-target" class="bpmn-canvas" style="flex: 1; min-height: 400px; width: 100%; height: 100%;"></div>
+                    </div>
                 </div>
-                <div class="viewer-container">
-                    <h4>Target Environment <span class="badge badge-warning">Current</span></h4>
-                    <div id="canvas-target" class="bpmn-canvas"></div>
+                <div class="diff-text-section" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1rem; border: 1px solid rgba(255,255,255,0.05);">
+                    <h4 style="margin-bottom: 0.5rem; color: var(--primary);">XML Content Difference</h4>
+                    <pre id="diff-text-content" style="font-family: monospace; white-space: pre-wrap; font-size: 0.85rem; color: #a6e22e; max-height: 250px; overflow-y: auto; overflow-x: auto; padding: 0.5rem; background: #111; border-radius: 4px;"></pre>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=2"></script>
 </body>
 </html>
