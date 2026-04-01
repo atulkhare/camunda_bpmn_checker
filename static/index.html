@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camunda Configurator & Sync Tool</title>
+    <title>Aligner</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/bpmn-js@17/dist/bpmn-viewer.production.min.js"></script>
     <link rel="stylesheet" href="style.css">
@@ -13,45 +14,74 @@
     <main class="container">
         
         <header>
-            <h1>Camunda BPMN Sync</h1>
+            <h1>Aligner</h1>
             <p>Easily check and synchronize your process models across environments seamlessly.</p>
         </header>
+        <div class="tabs-container" style="margin-bottom: 2rem;">
+            <div class="tabs">
+                <button class="tab-btn active" id="btn-tab-local" onclick="app.switchTab('local')">Local Folder vs Server</button>
+                <button class="tab-btn" id="btn-tab-server" onclick="app.switchTab('server')">Server vs Server</button>
+                <button class="tab-btn" id="btn-tab-config" onclick="app.switchTab('config')">Configuration & Mappings</button>
+            </div>
+        </div>
 
-        <section class="card config-panel">
-            <h2>Current Configuration</h2>
-            <div class="input-group">
-                <label>Source Camunda (Read-only)</label>
-                <input type="text" id="config-source" readonly value="Loading...">
-            </div>
-            <div class="input-group">
-                <label>Target Camunda (Read-only)</label>
-                <input type="text" id="config-target" readonly value="Loading...">
-            </div>
-            <div class="input-group">
-                <label>Git Repository Path (Read-only)</label>
-                <input type="text" id="config-git" readonly value="Loading...">
+        <section id="tab-local" class="tab-content active">
+            <div class="action-panel" style="display: flex; gap: 1rem; align-items: center; justify-content: flex-start; margin-bottom: 2rem; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <button class="btn btn-primary" onclick="app.runLocalCheck()">
+                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Check Folder against Servers
+                </button>
+                <button class="btn btn-secondary" onclick="app.prepareLocalSync()">
+                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Deploy Local Changes to Servers
+                </button>
             </div>
         </section>
 
-        <section class="action-panel">
-            <button class="btn btn-primary" id="btn-check" onclick="app.runCheck()">
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Check Sync
-            </button>
-            <button class="btn" style="background:#0d9488; color:white; border-radius:8px;" id="btn-compare" onclick="app.compareServers()">
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-                Compare Servers
-            </button>
-            <button class="btn btn-secondary" id="btn-sync" onclick="app.prepareSync()">
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Prepare Sync
-            </button>
+        <section id="tab-server" class="tab-content" style="display: none;">
+            <div class="action-panel">
+                <button class="btn" style="background:#0d9488; color:white; border-radius:8px;" id="btn-compare" onclick="app.compareServers()">
+                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Compare Source Server vs Target Server
+                </button>
+                <div style="flex:1;"></div>
+            </div>
+        </section>
+
+        <section id="tab-config" class="tab-content" style="display: none;">
+            <div class="card config-panel" style="margin-bottom: 2rem;">
+                <h2>Global Environment Variables</h2>
+                <div class="input-group">
+                    <label>Technical Folder Path (Read-only)</label>
+                    <input type="text" id="config-folder" readonly value="Loading...">
+                </div>
+                <div class="input-group">
+                    <label>Target Environment Base URL</label>
+                    <input type="text" id="config-target-base" value="Loading...">
+                </div>
+                <div class="input-group">
+                    <label>Source Environment Base URL</label>
+                    <input type="text" id="config-source" value="Loading...">
+                </div>
+            </div>
+
+            <div class="card config-panel">
+                <h2>Application Context Mappings (mapping.json)</h2>
+                <p style="color:var(--text-secondary); margin-bottom:1rem; font-size:0.9rem;">Map the specific folder Application name to its respective Engine Context Path.</p>
+                <div id="mapping-container" style="display:flex; flex-direction:column; gap:0.5rem;">
+                    <!-- Mapping rows dynamically injected here -->
+                </div>
+                <div style="margin-top: 1.5rem; display: flex; align-items: center; gap: 1rem;">
+                    <button class="btn btn-secondary" onclick="app.addMappingRow()">+ Add Mapping</button>
+                    <button class="btn btn-primary" onclick="app.saveMappings()">Save Mappings</button>
+                </div>
+            </div>
         </section>
 
         <section class="results-panel" id="results-container">

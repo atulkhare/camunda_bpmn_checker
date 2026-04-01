@@ -1,0 +1,15 @@
+for the functionality where we were checking the difference between git files 
+and server deployed files, please change few things as below
+1. read files from folder structure 
+C:\Users\Vidmay\Documents\projects\camunda_bpmn_checker\Technical Folder
+2. this folder structure is having 2 sub folders called BPMN and DMN
+3. inside these BPMN and DMN folders there are workflow specific folders containing
+files with .bpmn and .dmn extensions
+4. we need to read all the files from these folders and check for the difference
+between the files and server deployed files
+5. inside BPMN and DMN folder, folder names are corresponds to workflow application names
+there sgould be a mapping file called mapping.json should be there and same will be 
+displayed in a section on the UI itself where workflow name and its context path 
+can be mapped and then based on that we can check for the difference between the files and server deployed files
+6. on the UI git-to-server and server-to-server sync/difference should be shown in 2 separate tabs
+7. 

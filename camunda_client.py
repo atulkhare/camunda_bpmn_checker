@@ -36,7 +36,8 @@ def get_decision_definition_xml(base_url, decision_definition_id):
     url = f"{base_url}/decision-definition/{decision_definition_id}/xml"
     response = requests.get(url)
     response.raise_for_status()
-    return response.json().get("dmn11Xml")
+    # Camunda REST API returns 'dmnXml' for decision-definition XML
+    return response.json().get("dmnXml")
 
 def get_deployment(base_url, deployment_id):
     """

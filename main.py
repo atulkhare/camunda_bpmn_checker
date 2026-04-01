@@ -4,7 +4,7 @@ from core import run_check, prepare_sync, execute_sync, compare_servers
 from config import SOURCE_CAMUNDA_REST_URL, TARGET_CAMUNDA_REST_URL
 
 def check_command():
-    print("Starting Camunda BPMN Checker [Check Mode]...")
+    print("Starting Aligner [Check Mode]...")
     print(f"Fetching deployed process definitions from Source Camunda ({SOURCE_CAMUNDA_REST_URL})...")
     
     result = run_check()
@@ -38,7 +38,7 @@ def check_command():
         sys.exit(1)
 
 def sync_command():
-    print("Starting Camunda BPMN Checker [Sync Mode]...")
+    print("Starting Aligner [Sync Mode]...")
     print(f"Source: {SOURCE_CAMUNDA_REST_URL}")
     print(f"Target: {TARGET_CAMUNDA_REST_URL}")
     print("\nFetching latest definitions securely...")
@@ -115,7 +115,7 @@ def ui_command():
     start_server()
 
 def main():
-    parser = argparse.ArgumentParser(description="Camunda BPMN Checker & Sync Tool")
+    parser = argparse.ArgumentParser(description="Aligner - Process Deployment & Sync Tool")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     subparsers.add_parser("check", help="Check if Camunda deployed definitions match local Git files")

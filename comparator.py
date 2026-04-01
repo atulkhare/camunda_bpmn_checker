@@ -5,11 +5,13 @@ def canonicalize_xml(xml_string):
     Returns a canonical string representation of an XML document.
     Ignores whitespace differences and attribute ordering.
     """
+    if xml_string is None:
+        return ""
     try:
         return ET.canonicalize(xml_string, strip_text=True)
     except Exception as e:
         print(f"Warning: XML parsing failed for comparison - {e}")
-        return xml_string.strip()
+        return xml_string.strip() if hasattr(xml_string, 'strip') else str(xml_string)
 
 def compare_bpmn(bpmn_xml_1, bpmn_xml_2):
     """
