@@ -68,170 +68,166 @@ def run_check():
 
     return result
 
-def prepare_sync():
-    result = {
-        "deployments_to_sync": {},
-        "error": None
-    }
+def prepare_sync(source_url=None, target_url=None):
+    comp = compare_servers(source_url, target_url)
+    if comp.get("error"):
+        return {"error": comp["error"]}
+        
+    deployments = {}
     
-    resources_by_deployment_id = {}
-
-    try:
-        process_defs = get_latest_process_definitions(SOURCE_CAMUNDA_REST_URL)
-        for p in process_defs:
-            process_id = p.get("id")
-            resource_name = p.get("resource")
-            deployment_id = p.get("deploymentId")
-            if not resource_name or not deployment_id:
-                continue
-            xml = get_process_definition_xml(SOURCE_CAMUNDA_REST_URL, process_id)
-            if deployment_id not in resources_by_deployment_id:
-                resources_by_deployment_id[deployment_id] = []
-            resources_by_deployment_id[deployment_id].append((resource_name, xml))
-    except Exception as e:
-        result["error"] = f"Error fetching process definitions: {e}"
-        return result
-
-    try:
-        decision_defs = get_latest_decision_definitions(SOURCE_CAMUNDA_REST_URL)
-        for d in decision_defs:
-            decision_id = d.get("id")
-            resource_name = d.get("resource")
-            deployment_id = d.get("deploymentId")
-            if not resource_name or not deployment_id:
-                continue
-            xml = get_decision_definition_xml(SOURCE_CAMUNDA_REST_URL, decision_id)
-            if deployment_id not in resources_by_deployment_id:
-                resources_by_deployment_id[deployment_id] = []
-            resources_by_deployment_id[deployment_id].append((resource_name, xml))
-    except Exception as e:
-        result["error"] = f"Error fetching decision definitions: {e}"
-        return result
-
-    deployments_to_sync = {}
-    for dep_id, items in resources_by_deployment_id.items():
-        try:
-            dep_info = get_deployment(SOURCE_CAMUNDA_REST_URL, dep_id)
-            dep_name = dep_info.get("name", f"Deployment-{dep_id}")
+    for item in comp.get("missing_in_target", []) + comp.get("modified", []):
+        app = item["app"]
+        if app not in deployments: 
+            deployments[app] = {}
+        if item.get("source_xml"):
+            deployments[app][item["resource"]] = item["source_xml"]
             
-            if dep_name not in deployments_to_sync:
-                deployments_to_sync[dep_name] = {}
-                
-            for resource_name, xml in items:
-                deployments_to_sync[dep_name][resource_name] = xml
-        except Exception as e:
-            # gracefully handle missing deployments
-            pass
-            
-    result["deployments_to_sync"] = deployments_to_sync
-    return result
-
-def execute_sync(deployments_to_sync):
-    result = {
-        "success": [],
-        "failed": []
-    }
+    deployments = {k: v for k, v in deployments.items() if v}
     
-    for dep_name, files_dict in deployments_to_sync.items():
-        try:
-            res = deploy_to_camunda(TARGET_CAMUNDA_REST_URL, dep_name, files_dict)
-            result["success"].append({"deployment_name": dep_name, "id": res.get("id")})
-        except Exception as e:
-            result["failed"].append({"deployment_name": dep_name, "error": str(e)})
+    if not deployments:
+        return {"error": "No new or modified files found to deploy!"}
+        
+    return {"deployments_to_sync": deployments}
+
+def execute_sync(payload, base_url=None):
+    """
+    Takes the deployment payload and hits the specific mapped URLs on the target.
+    payload: { "AppName": {"file.bpmn": "<xml>", "rule.dmn": "<xml>"} }
+    """
+    if not base_url:
+        base_url = TARGET_CAMUNDA_REST_URL
+        
+    mappings = get_mappings()
+    results = {"success": [], "failed": []}
+    
+    for app_name, files_dict in payload.items():
+        if app_name not in mappings:
+            results["failed"].append({"app": app_name, "error": f"Mapping missing for {app_name}!"})
+            continue
             
-    return result
+        ctx = mappings[app_name].strip('/')
+        if ctx.endswith('engine-rest'):
+            ctx = ctx[:-11].strip('/')
+            
+        target_url = f"{base_url.rstrip('/')}/{ctx}/engine-rest"
+        deployment_name = app_name
+        
+        try:
+            resp = deploy_to_camunda(target_url, deployment_name, files_dict)
+            results["success"].append({
+                "app": app_name,
+                "id": resp.get("id"),
+                "files_deployed": list(files_dict.keys())
+            })
+        except Exception as e:
+            results["failed"].append({"app": app_name, "error": str(e)})
+            
+    return results
 
 def compare_servers(source_url=None, target_url=None):
     source_url = source_url or SOURCE_CAMUNDA_REST_URL
     target_url = target_url or TARGET_CAMUNDA_REST_URL
     
-    if source_url and not source_url.rstrip('/').endswith('engine-rest'):
-        source_url = f"{source_url.rstrip('/')}/engine-rest"
-    if target_url and not target_url.rstrip('/').endswith('engine-rest'):
-        target_url = f"{target_url.rstrip('/')}/engine-rest"
-    
     result = {
-        "missing_in_target": [],
-        "modified": [],
+        "apps_checked": 0,
         "matches": [],
-        "error": None
+        "modified": [],
+        "missing_in_target": [],
+        "error": None,
+        "failed_connections": []
     }
     
-    try:
-        source_process_defs = get_latest_process_definitions(source_url)
-        source_decision_defs = get_latest_decision_definitions(source_url)
-    except Exception as e:
-        result["error"] = f"Error fetching from Source Server: {e}"
+    mappings = get_mappings()
+    if not mappings:
+        result["error"] = "No app mappings defined in configuration."
         return result
         
-    try:
-        target_process_defs = get_latest_process_definitions(target_url)
-        target_decision_defs = get_latest_decision_definitions(target_url)
-    except Exception as e:
-        result["error"] = f"Error fetching from Target Server: {e}"
-        return result
-        
-    target_defs = {}
-    for p in target_process_defs:
-        key = p.get("key")
-        if key:
-            target_defs[key] = {"id": p.get("id"), "type": "process", "resource": p.get("resource")}
-    for d in target_decision_defs:
-        key = d.get("key")
-        if key:
-            target_defs[key] = {"id": d.get("id"), "type": "decision", "resource": d.get("resource")}
-            
-    source_defs = []
-    for p in source_process_defs:
-        if p.get("key"):
-            source_defs.append({"key": p.get("key"), "resource": p.get("resource"), "id": p.get("id"), "type": "process"})
-    for d in source_decision_defs:
-        if d.get("key"):
-            source_defs.append({"key": d.get("key"), "resource": d.get("resource"), "id": d.get("id"), "type": "decision"})
-            
     import difflib
     from comparator import canonicalize_xml
 
-    for s_def in source_defs:
-        key = s_def["key"]
-        resource_name = s_def["resource"]
-        
-        if key not in target_defs:
-            result["missing_in_target"].append({"key": key, "resource": resource_name})
-            continue
+    for app_name, context_path in mappings.items():
+        ctx = context_path.strip('/')
+        if ctx.endswith('engine-rest'):
+            ctx = ctx[:-11].strip('/')
             
-        t_def = target_defs[key]
+        s_url = f"{source_url.rstrip('/')}/{ctx}/engine-rest"
+        t_url = f"{target_url.rstrip('/')}/{ctx}/engine-rest"
         
         try:
-            if s_def["type"] == "process":
-                source_xml = get_process_definition_xml(source_url, s_def["id"])
-                target_xml = get_process_definition_xml(target_url, t_def["id"])
-            else:
-                source_xml = get_decision_definition_xml(source_url, s_def["id"])
-                target_xml = get_decision_definition_xml(target_url, t_def["id"])
+            source_process_defs = get_latest_process_definitions(s_url)
+            source_decision_defs = get_latest_decision_definitions(s_url)
         except Exception as e:
+            result["failed_connections"].append({"app": app_name, "error": f"Source fetch failed: {e}", "url": s_url})
             continue
             
-        if compare_bpmn(source_xml, target_xml):
-            result["matches"].append({"key": key, "resource": resource_name})
-        else:
-            s_lines = canonicalize_xml(source_xml).splitlines()
-            t_lines = canonicalize_xml(target_xml).splitlines()
-            diff_text = "\n".join(difflib.unified_diff(
-                t_lines, s_lines, 
-                fromfile=f"Target Server ({t_def['resource']})", 
-                tofile=f"Source Server ({resource_name})"
-            ))
+        try:
+            target_process_defs = get_latest_process_definitions(t_url)
+            target_decision_defs = get_latest_decision_definitions(t_url)
+        except Exception as e:
+            result["failed_connections"].append({"app": app_name, "error": f"Target fetch failed: {e}", "url": t_url})
+            continue
+
+        result["apps_checked"] += 1
+        
+        target_defs = {}
+        for p in target_process_defs:
+            if p.get("key"): target_defs[p.get("key")] = {"id": p.get("id"), "type": "process", "resource": p.get("resource")}
+        for d in target_decision_defs:
+            if d.get("key"): target_defs[d.get("key")] = {"id": d.get("id"), "type": "decision", "resource": d.get("resource")}
             
-            result["modified"].append({
-                "key": key,
-                "resource": resource_name,
-                "type": s_def["type"],
-                "diff": diff_text,
-                "source_xml": source_xml,
-                "target_xml": target_xml
-            })
+        source_defs = []
+        for p in source_process_defs:
+            if p.get("key"): source_defs.append({"key": p.get("key"), "resource": p.get("resource"), "id": p.get("id"), "type": "process"})
+        for d in source_decision_defs:
+            if d.get("key"): source_defs.append({"key": d.get("key"), "resource": d.get("resource"), "id": d.get("id"), "type": "decision"})
             
+        for s_def in source_defs:
+            key = s_def["key"]
+            resource_name = s_def["resource"]
+            
+            if key not in target_defs:
+                try:
+                    if s_def["type"] == "process":
+                        s_xml = get_process_definition_xml(s_url, s_def["id"])
+                    else:
+                        s_xml = get_decision_definition_xml(s_url, s_def["id"])
+                except Exception:
+                    s_xml = ""
+                result["missing_in_target"].append({"app": app_name, "key": key, "resource": resource_name, "source_xml": s_xml})
+                continue
+                
+            t_def = target_defs[key]
+            
+            try:
+                if s_def["type"] == "process":
+                    s_xml = get_process_definition_xml(s_url, s_def["id"])
+                    t_xml = get_process_definition_xml(t_url, t_def["id"])
+                else:
+                    s_xml = get_decision_definition_xml(s_url, s_def["id"])
+                    t_xml = get_decision_definition_xml(t_url, t_def["id"])
+            except Exception as e:
+                continue
+                
+            if compare_bpmn(s_xml, t_xml):
+                result["matches"].append({"app": app_name, "key": key, "resource": resource_name})
+            else:
+                s_lines = canonicalize_xml(s_xml).splitlines()
+                t_lines = canonicalize_xml(t_xml).splitlines()
+                diff_text = "\n".join(difflib.unified_diff(
+                    t_lines, s_lines, 
+                    fromfile=f"Target ({t_def['resource']})", 
+                    tofile=f"Source ({resource_name})"
+                ))
+                result["modified"].append({
+                    "app": app_name,
+                    "key": key,
+                    "resource": resource_name,
+                    "type": s_def["type"],
+                    "diff": diff_text,
+                    "source_xml": s_xml,
+                    "target_xml": t_xml
+                })
+                
     return result
 
 import json

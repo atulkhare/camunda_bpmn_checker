@@ -285,15 +285,17 @@ const app = {
     async prepareSync() {
         this.setLoading("Fetching latest definitions securely");
         try {
-            const res = await fetch('/api/sync/prepare');
+            const sourceUrl = document.getElementById('config-source').value;
+            const targetUrl = document.getElementById('config-target-base').value;
+            const res = await fetch(`/api/sync/prepare?sourceUrl=${encodeURIComponent(sourceUrl)}&targetUrl=${encodeURIComponent(targetUrl)}`);
             const data = await res.json();
             
             if (res.status !== 200) throw new Error(data.error || "Unknown Error");
 
             this.sessionId = data.session_id;
 
-            let html = `<h2>Sync Preview</h2>`;
-            html += `<p>Please review the deployments grouped by name below. If everything looks correct, confirm the sync.</p>`;
+            let html = `<h2>Sync Preview (Multi-App)</h2>`;
+            html += `<p>Please review the deployments grouped by application below. If everything looks correct, confirm the sync.</p>`;
             
             for (const [depName, files] of Object.entries(data.deployments)) {
                 html += `
@@ -308,7 +310,7 @@ const app = {
 
             html += `
                 <div class="sync-confirm-box">
-                    <p style="margin-bottom: 1rem;">Ready to deploy to target server?</p>
+                    <p style="margin-bottom: 1rem;">Ready to dynamically deploy these bundles across their target micro-services?</p>
                     <button class="btn btn-primary" onclick="app.executeSync()" style="width: 100%;">
                         🚀 Confirm & Sync to Target
                     </button>
@@ -323,11 +325,15 @@ const app = {
     },
 
     async compareServers() {
-        this.setLoading("Comparing Source and Target Servers by Key");
+        this.setLoading("Comparing Multi-App Servers by Mapping");
         try {
             const sourceUrl = document.getElementById('config-source').value;
             const targetUrl = document.getElementById('config-target-base').value;
             const res = await fetch(`/api/compare?sourceUrl=${encodeURIComponent(sourceUrl)}&targetUrl=${encodeURIComponent(targetUrl)}`);
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Server Error (${res.status}): ` + text.substring(0, 150));
+            }
             const data = await res.json();
             
             if (data.error) {
@@ -335,41 +341,77 @@ const app = {
                 return;
             }
 
-            let html = `<h2>Server Comparison Results</h2>`;
+            let html = `<h2>Multi-App Server Comparison Results</h2>`;
+            html += `<p>Total Applications Checked: <strong>${data.apps_checked || 0}</strong></p>`;
+            
+            if (data.failed_connections && data.failed_connections.length > 0) {
+                html += `<div style="padding:1rem; background:rgba(239, 68, 68, 0.2); border-radius:8px; margin-bottom:1rem; color:var(--danger)">
+                    <strong>Warning:</strong> Could not connect to some mapped endpoints.
+                </div>`;
+                html += this.renderList("Connection Errors", data.failed_connections, "badge-danger", false, "app", "url");
+            }
             
             if (data.modified.length === 0 && data.missing_in_target.length === 0) {
-                html += `<div style="padding:1rem; background:rgba(16, 185, 129, 0.2); border-radius:8px; margin-bottom:1rem; color:var(--success)">
-                    <strong>Perfect Match:</strong> No differences found between the servers!
-                </div>`;
+                if (!data.failed_connections || data.failed_connections.length === 0) {
+                    html += `<div style="padding:1rem; background:rgba(16, 185, 129, 0.2); border-radius:8px; margin-bottom:1rem; color:var(--success)">
+                        <strong>Perfect Match:</strong> All applications mirror each other perfectly across the cluster!
+                    </div>`;
+                }
             } else {
-                html += `<p>Found differences between the Source and Target environments:</p>`;
+                html += `<p style="margin-bottom:1rem;">Found differences across mapped micro-services:</p>`;
             }
 
-            // Build Modified List with custom buttons
-            if (data.modified.length > 0) {
-                html += `<div class="result-group">
-                    <h3>Modified (Content Mismatch) <span class="badge badge-warning">${data.modified.length}</span></h3>
-                    <ul class="result-list">`;
-                
-                if (!window._diffData) window._diffData = [];
-                data.modified.forEach((item, index) => {
-                    window._diffData[index] = item;
-                    html += `
-                        <li>
-                            <div>
-                                <strong style="display:block;">${item.resource}</strong> 
-                                <span style="color:var(--text-secondary); font-size:0.8rem;">Key: ${item.key} | Type: ${item.type}</span>
-                            </div>
-                            ${item.type === 'process' 
-                                ? `<button class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size:0.85rem;" onclick="app.openDiffModal(${index})">View Diagram diff</button>` 
-                                : `<span style="font-size:0.8rem; color:var(--text-secondary)">DMN (Check CLI for text diff)</span>`}
-                        </li>
-                    `;
-                });
-                html += `</ul></div>`;
-            }
+            // Aggregate data by Application Name
+            const apps = {};
+            const ensureApp = (app) => { if(!apps[app]) apps[app] = { matches: [], modified: [], missing: [] }; return apps[app]; };
+            data.matches.forEach(item => ensureApp(item.app).matches.push(item));
+            if (!window._diffData) window._diffData = [];
+            data.modified.forEach((item, idx) => { window._diffData[idx] = item; ensureApp(item.app).modified.push({...item, originalIndex: idx}); });
+            data.missing_in_target.forEach(item => ensureApp(item.app).missing.push(item));
 
-            html += this.renderList("Missing in Target", data.missing_in_target, "badge-danger", false, "resource", "key");
+            // Generate beautifully grouped HTML
+            for (const [appName, content] of Object.entries(apps)) {
+                html += `<div class="result-group" style="padding: 1.5rem; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 1.5rem;">`;
+                html += `<h3 style="margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; color: var(--primary);">📦 ${appName}</h3>`;
+
+                if (content.modified.length > 0) {
+                    html += `<h4 style="margin-top: 1rem; color: var(--warning);">Modified (Content Mismatch)</h4>
+                             <ul class="result-list">`;
+                    content.modified.forEach(item => {
+                        html += `
+                            <li style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="display:block;">${item.resource}</strong> 
+                                    <span style="color:var(--text-secondary); font-size:0.8rem;">Key: ${item.key} | Type: ${item.type}</span>
+                                </div>
+                                ${item.type === 'process' 
+                                    ? `<button class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size:0.85rem;" onclick="app.openDiffModal(${item.originalIndex})">View Diagram diff</button>` 
+                                    : `<span style="font-size:0.8rem; color:var(--text-secondary)">DMN (Check CLI for text diff)</span>`}
+                            </li>`;
+                    });
+                    html += `</ul>`;
+                }
+
+                if (content.missing.length > 0) {
+                    html += `<h4 style="margin-top: 1rem; color: var(--danger);">Missing in Target</h4>
+                             <ul class="result-list">`;
+                    content.missing.forEach(item => {
+                        html += `<li><strong>${item.resource}</strong> <span style="color:var(--text-secondary); font-size:0.8rem;">Key: ${item.key}</span></li>`;
+                    });
+                    html += `</ul>`;
+                }
+
+                if (content.matches.length > 0) {
+                    html += `<h4 style="margin-top: 1rem; color: var(--success);">Matches</h4>
+                             <ul class="result-list">`;
+                    content.matches.forEach(item => {
+                        html += `<li><strong>${item.resource}</strong> <span style="color:var(--text-secondary); font-size:0.8rem;">Key: ${item.key}</span></li>`;
+                    });
+                    html += `</ul>`;
+                }
+
+                html += `</div>`;
+            }
 
             document.getElementById('results-container').innerHTML = html;
         } catch (e) {
@@ -405,30 +447,31 @@ const app = {
     },
 
     async executeSync() {
-        this.setLoading("Deploying bundles to Target Camunda Engine");
+        this.setLoading("Deploying bundles to Target Micro-Services");
         try {
+            const baseUrl = document.getElementById('config-target-base').value;
             const res = await fetch('/api/sync/execute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: this.sessionId })
+                body: JSON.stringify({ session_id: this.sessionId, baseUrl: baseUrl })
             });
             const data = await res.json();
             
-            let html = `<h2>Deployment Complete</h2>`;
+            let html = `<h2>Dynamic Deployment Complete</h2>`;
             
             if (data.failed && data.failed.length > 0) {
                 html += `<div style="padding:1rem; background:rgba(239, 68, 68, 0.2); border-radius:8px; margin-bottom:1rem; color:var(--danger)">
-                    <strong>Warning:</strong> Some deployments failed.
+                    <strong>Warning:</strong> Some application deployments failed.
                 </div>`;
-                html += this.renderList("Failed Deployments", data.failed, "badge-danger", false, "deployment_name");
+                html += this.renderList("Failed Deployments", data.failed, "badge-danger", false, "app");
             } else {
                 html += `<div style="padding:1rem; background:rgba(16, 185, 129, 0.2); border-radius:8px; margin-bottom:1rem; color:var(--success)">
-                    <strong>Success!</strong> All bundles were deployed successfully.
+                    <strong>Success!</strong> All application bundles were dynamically deployed successfully.
                 </div>`;
             }
 
             if (data.success && data.success.length > 0) {
-                html += this.renderList("Successful Deployments", data.success, "badge-success", false, "deployment_name", "id");
+                html += this.renderList("Successful Deployments (App Name -> ID)", data.success, "badge-success", false, "app", "id");
             }
 
             document.getElementById('results-container').innerHTML = html;

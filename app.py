@@ -53,7 +53,10 @@ def api_compare():
 
 @app.route("/api/sync/prepare")
 def api_prepare_sync():
-    result = prepare_sync()
+    source_url = request.args.get('sourceUrl')
+    target_url = request.args.get('targetUrl')
+    
+    result = prepare_sync(source_url, target_url)
     if not result.get("error"):
         frontend_data = {}
         for dep_name, files in result["deployments_to_sync"].items():
@@ -74,11 +77,12 @@ def api_prepare_sync():
 def api_execute_sync():
     data = request.json
     session_id = data.get("session_id")
+    target_url = data.get("baseUrl")
     if not session_id or session_id not in session_store:
         return jsonify({"error": "Invalid or expired session. Please prepare sync again."}), 400
         
     payload = session_store[session_id]
-    result = execute_sync(payload)
+    result = execute_sync(payload, target_url)
     
     del session_store[session_id]
     return jsonify(result)
